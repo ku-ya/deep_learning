@@ -28,8 +28,8 @@ def main():
     #
     # rgb_train = train_datagen.flow_from_directory(
     #     train_path+'rgb', batch_size=batch_size, target_size=(640,1))
-    N = 1100
-    rgbd_train = np.empty([N, 3, 640,1])
+    N = 6473
+    rgbd_train = np.empty([N*64, 3, 10,10])
 
     directory = train_path+'rgb/'
     i = 0
@@ -37,14 +37,17 @@ def main():
         if filename.endswith(".jpg"):
             # print(os.path.join(directory, filename))
             # print(filename)
-            rgbd_train[i,:,:,0] = imageio.imread(directory+filename).reshape([3,640])/255.
-            i = i + 1
+            image = imageio.imread(directory+filename).T
+
+            for j in range(64):
+                rgbd_train[i+j,:,:,:] = image[:,j*10:(j+1)*10,:]
+            i = i + 64
             continue
         else:
             continue
 
     # print("Training rgb shape: " )
-    depth_array = np.empty([N, 640, 1])
+    depth_array = np.empty([N*64, 1, 10, 10])
     directory = train_path+'depth/'
     i = 0
     for filename in os.listdir(directory):
@@ -52,8 +55,11 @@ def main():
             # print(os.path.join(directory, filename))
             # print(filename)
             # rgbd_train[i,3,:] = np.load(directory+filename)
-            depth_array[i,:,0] =  np.load(directory+filename)
-            i = i + 1
+            image = np.load(directory+filename).T
+            # print(image.shape)
+            for j in range(64):
+                depth_array[j+i,0,:,:] =  image[j*10:(j+1)*10,:]
+            i = i + 64
             continue
         else:
             continue
@@ -61,14 +67,14 @@ def main():
     print('depth train size: '+str(depth_array.shape))
     print('rgb train size: '+str(rgbd_train.shape))
 
-    laser_array = np.empty([N, 640])
+    laser_array = np.empty([N*64, 10])
     i = 0
     directory = train_path+'laser_fov/'
     for filename in os.listdir(directory):
         if filename.endswith(".npy"):
             # print(os.path.join(directory, filename))
             # print(filename)
-            laser_array[i,:] = np.load(directory+filename)
+            laser_array[i*64:(i+1)*64,:] = np.load(directory+filename).reshape([64,10])
             i = i + 1
             continue
         else:
@@ -77,14 +83,12 @@ def main():
 
 
     depth_model = Sequential()
-    depth_model.add(BatchNormalization(axis=1,input_shape=(640, 1)))
-    depth_model.add(Dense(8, activation='relu'))
-    depth_model.add(Convolution1D(nb_filter=32,
-                                  filter_length=3,
-                                #   input_shape=(640,1),
-                                  border_mode='same',
-                                  activation='relu'))
-    depth_model.add(MaxPooling1D(2,stride=2))
+    depth_model.add(BatchNormalization(axis=1,input_shape=(1,10, 10)))
+    depth_model.add(Dense(10, activation='relu'))
+    depth_model.add(Convolution2D(32, 3, 3, border_mode='same', activation='relu',dim_ordering = 'th'))
+    # depth_model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    depth_model.add(BatchNormalization())
+    # depth_model.add(MaxPooling1D(2,stride=2))
     # depth_model.add(Dropout(0.2))
     # depth_model.add(Convolution1D(nb_filter=64,
     #                               filter_length=3,
@@ -107,16 +111,19 @@ def main():
     # depth_model.add(Dense(640,activation='linear'))
 
     # depth_model.summary()
-    batch_size = 100
+    batch_size = 6400
     no_of_epochs = 10
     # depth_model.fit(depth_array, laser_array, nb_epoch=no_of_epochs, batch_size=batch_size)
 
 
 
     model = Sequential()
-    model.add(BatchNormalization(axis=1,input_shape=(3, 640, 1)))
-    model.add(Convolution2D(32, 3, 1, border_mode='same', input_shape=(3, 640, 1),activation='relu'))
-    model.add(MaxPooling2D((1, 2), strides=(1, 2)))
+    model.add(BatchNormalization(axis=1,input_shape=(3, 10, 10)))
+    model.add(Convolution2D(32, 3, 3, border_mode='same', input_shape=(3, 10, 10), dim_ordering = 'th',activation='relu'))
+    model.add(MaxPooling2D((2, 2), strides=(2, 2), dim_ordering = 'th'))
+    # model.add(BatchNormalization())
+    # model.add(Convolution2D(32, 3, 3, border_mode='same', activation='relu', dim_ordering = 'th' ))
+    # model.add(MaxPooling2D((2, 2), strides=(2, 2)))
     model.add(BatchNormalization())
     # model.add(Convolution2D(64, 3, 1, border_mode='same',activation='relu'))
     # model.add(MaxPooling2D((1, 2), strides=(1, 2)))
@@ -141,10 +148,11 @@ def main():
     merge = Merge([depth_model, model],mode='concat')
 
     final_model.add(merge)
-    final_model.add(Dense(640, activation='linear'))
+    final_model.add(Dense(1000, activation='linear'))
+    final_model.add(Dense(10, activation='linear'))
     final_model.summary()
     # final_model.load_weights('models/model_weights_1.h5')
-    sgd = SGD(lr=0.1, decay=1e-4, momentum=0.9, nesterov=True)
+    sgd = SGD(lr=0.01, decay=1e-4, momentum=0.9, nesterov=True)
     rms = RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)
     final_model.compile(loss='mae', optimizer=sgd)
     final_model.fit([depth_array, rgbd_train], laser_array, nb_epoch=no_of_epochs, batch_size=batch_size)
