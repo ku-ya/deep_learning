@@ -18,8 +18,6 @@ def main():
     train_path = DATA_HOME_DIR+'train/'
     valid_path = DATA_HOME_DIR+'valid/'
 
-
-
     # train_datagen = image.ImageDataGenerator(
     #     rescale=1./255,
     #     shear_range=0,
