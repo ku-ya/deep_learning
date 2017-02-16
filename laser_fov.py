@@ -10,8 +10,8 @@ import pdb
 import rosbag
 from sklearn.neighbors import NearestNeighbors
 import math
-import icp
-
+import bcolz
+from utils import *
 # fname = '1487017469966396563'
 def icp(a, b, init_pose=(0,0,0), no_iterations = 13):
     src = np.array([a.T], copy=True).astype(np.float32)
@@ -38,13 +38,7 @@ def icp(a, b, init_pose=(0,0,0), no_iterations = 13):
         Tr = np.dot(Tr, np.vstack((T,[0,0,1])))
     return Tr[0:2]
 
-def laser(data, pose):
-    r = data
-    N = len(data)
-    laser_angle_range = 270./180*np.pi
-    angle_offset = -18./180*np.pi
-    laser_angle = np.linspace(-1./2*laser_angle_range + pose[2],1./2*laser_angle_range + pose[2], N, endpoint=True)
-    plt.plot(r*np.cos(laser_angle) + pose[0], r*np.sin(laser_angle) + pose[1], 'r.')
+
 #
 # bag = rosbag.Bag('/media/kuya/e7916bba-cd32-4e8e-b40c-c0705c6699f3/2017-02-13-15-24-28.bag')
 #
@@ -138,7 +132,7 @@ def laser(data, pose):
 # bag.close()
 # sys.exit()
 
-data_path = 'data/sensor_pos_data'
+
 # r = np.load(data_path+'/laser/'+fname+'.npy')
 # N = len(r)
 
@@ -149,44 +143,91 @@ data_path = 'data/sensor_pos_data'
 # x = np.load(data_path+'/depth/'+fname+'.npy')
 def depth(data, pose):
     r = np.mean(data,axis=0)
-    N = 640
-    angle_range = 58./180*np.pi
-    angle = np.linspace(1./2*angle_range,-1./2*angle_range,N, endpoint=True)
-    plt.plot(pose[0] + r*np.cos(angle + pose[2]),pose[1] + r*np.sin(angle + pose[2]),'g.')
-plt.grid(True)
-axes = plt.gca()
-axes.set_xlim([-10, 10])
-axes.set_ylim([-10,10])
+    N = len(r)
+    resol = 0.0906
+    angle_range = resol*N/180*np.pi
+    angle = np.linspace(-1./2*angle_range, 1./2*angle_range,N, endpoint=True) - pose[2]
+    plt.plot(- pose[0] + r*np.cos(angle), - pose[1] + r*np.sin(angle),'g-')
+
+def laser(data, pose):
+    r = data
+    N = len(data)
+    resol = 0.25
+    laser_angle_range = resol*N/180*np.pi
+    angle_offset = -18./180*np.pi
+    laser_angle = np.linspace(-1./2*laser_angle_range, 1./2*laser_angle_range, N, endpoint=True) - pose[2]
+    plt.plot(r*np.cos(laser_angle) - pose[0], r*np.sin(laser_angle) - pose[1], 'r-')
+
 # print(f(angle).shape)
 # plt.plot(angle,f(angle)-x, 'o')
 # pylab.xlim([-1./2*angle_range, 1./2*angle_range])
 # pylab.ylim([0, 10])
 # plt.show()
 
-laser_dir = data_path + '/laser/'
-pose_dir = data_path + '/pose/'
-depth_dir = data_path + '/depth/'
+# fig = plt.figure()
+
+data_path = 'data/sensor_pos_data/'
+plt.grid(True)
+plt.axis('equal')
+axes = plt.gca()
+axes.set_xlim([0, 4])
+axes.set_ylim([-2,2])
+
+laser_dir = data_path + 'laser/'
+pose_dir = data_path + 'pose/'
+depth_dir = data_path + 'depth/'
+rgb_dir = data_path + 'rgb/'
+
+pose_array = []
+laser_array = []
+depth_array = []
+rgb_array = []
 # out_directory = data_path + '/laser_fov/'
 i = 0
+
+tic = time.clock()
 for filename in os.listdir(laser_dir):
     if filename.endswith(".npy"):
         # print(os.path.join(directory, filename))
         # print(filename)
+
         laser_in = np.load(laser_dir+filename)
         pose_in = np.load(pose_dir+filename)
         depth_in = np.load(depth_dir+filename)
+        rgb_in  = cv2.imread(rgb_dir+filename[:-3]+'jpg')
+
+        laser_in[laser_in>10] = float('nan')
+
+        laser_fov = laser_in[round(len(laser_in)*(1./2-58./270/2)):
+                             round(len(laser_in)*(1./2+58./270/2))]
+        laser_fov = laser_fov[::-1]
+        depth_in[depth_in>4] = float('nan')
+
+        depth_array.append(depth_in)
+        pose_array.append(pose_in)
+        laser_array.append(laser_fov)
+        rgb_array.append(rgb_in)
+
+
         # depth_in[np.isnan(depth_in)] = 10
         # print depth_in
-        laser(laser_in, pose_in)
-        depth(depth_in, pose_in)
+        # laser(laser_in, pose_in)
+        # depth(depth_in, pose_in)
         # plt.plot([pose_in[0], pose_in[0]+np.cos(pose_in[2])],[pose_in[1], pose_in[1]+np.sin(pose_in[2])], '-o')
         # plt.draw()
         # print(pose_in)
-        plt.pause(0.05)
-        print pose_in
+        # plt.pause(0.05)
+        # print pose_in
+        if round(i%50) ==0:
+            plt.plot(pose_in[1],pose_in[0],'sk')
+            laser(laser_fov, pose_in)
+            depth(depth_in, pose_in)
+            plt.pause(1)
+            plt.clf()
+            # fig.canvas.draw()
+            # print pose_in
         i = i + 1
-        if i > 0:
-            break
+            # break
             # plt.close()
         # f = interp1d(laser_angle, depth_in[::-1],kind='linear')
         # data_out = f(angle)
@@ -195,4 +236,21 @@ for filename in os.listdir(laser_dir):
     # else:
     #     continue
 
+print 'Read data time: ' + str(time.clock() - tic)
+pose_array = np.array(pose_array)
+laser_array = np.array(laser_array)
+rgb_array = np.array(rgb_array)
+depth_array = np.array(depth_array)
+
+print 'pose array size: ' + str(pose_array.shape)
+print 'laser array size: ' + str(laser_array.shape)
+print 'RGB array size: ' + str(rgb_array.shape)
+print 'Depth array size: ' + str(depth_array.shape)
+
+tic = time.clock()
+save_array(data_path+'pose.dat', pose_array)
+save_array(data_path+'laser.dat', laser_array)
+save_array(data_path+'rgb.dat', rgb_array)
+save_array(data_path+'depth.dat', depth_array)
+print 'Write .dat time: ' + str(time.clock()-tic)
 # plt.close()

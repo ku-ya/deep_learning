@@ -3,8 +3,19 @@ current_dir = os.getcwd()
 from utils import *
 from keras.layers import Merge
 import time
-import imageio
+# import imageio
 from keras.models import model_from_json
+import bcolz
+
+
+
+data_path = 'data/sensor_pos_data/'
+tic = time.clock()
+pose = load_array(data_path+'pose.dat')
+laser = load_array(data_path+'laser.dat')
+rgb = load_array(data_path+'rgb.dat')
+depth = load_array(data_path+'depth.dat')
+print 'time to load data: ' + str(time.clock() - tic)
 
 vgg_mean = np.array([123.68, 116.779, 103.939], dtype=np.float32).reshape((3,1,1))
 def main():
@@ -26,8 +37,8 @@ def main():
     #
     # rgb_train = train_datagen.flow_from_directory(
     #     train_path+'rgb', batch_size=batch_size, target_size=(640,1))
-    N = 6473
-    rgbd_train = np.empty([N*64, 3, 10,10])
+    N = pose.shape[0]
+    rgb_train = rgb
 
     directory = train_path+'rgb/'
     i = 0
