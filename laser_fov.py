@@ -41,11 +41,10 @@ def icp(a, b, init_pose=(0,0,0), no_iterations = 13):
 def laser(data, pose):
     r = data
     N = len(data)
-    print(pose)
     laser_angle_range = 270./180*np.pi
-    # angle_offset = -18./180*np.pi
+    angle_offset = -18./180*np.pi
     laser_angle = np.linspace(-1./2*laser_angle_range + pose[2],1./2*laser_angle_range + pose[2], N, endpoint=True)
-    plt.plot(r*np.cos(laser_angle) + pose[0], r*np.sin(laser_angle) + pose[1], '.')
+    plt.plot(r*np.cos(laser_angle) + pose[0], r*np.sin(laser_angle) + pose[1], 'r.')
 #
 # bag = rosbag.Bag('/media/kuya/e7916bba-cd32-4e8e-b40c-c0705c6699f3/2017-02-13-15-24-28.bag')
 #
@@ -149,11 +148,11 @@ data_path = 'data/sensor_pos_data'
 # plt.plot(angle, x[::-1],'o')
 # x = np.load(data_path+'/depth/'+fname+'.npy')
 def depth(data, pose):
-    x = np.mean(x,axis=0)
+    r = np.mean(data,axis=0)
+    N = 640
     angle_range = 58./180*np.pi
-    angle = np.linspace(1./2*angle_range,-1./2*angle_range,640, endpoint=True)
-
-# plt.plot(x*np.cos(angle),x*np.sin(angle),'go')
+    angle = np.linspace(1./2*angle_range,-1./2*angle_range,N, endpoint=True)
+    plt.plot(pose[0] + r*np.cos(angle + pose[2]),pose[1] + r*np.sin(angle + pose[2]),'g.')
 plt.grid(True)
 axes = plt.gca()
 axes.set_xlim([-10, 10])
@@ -166,28 +165,34 @@ axes.set_ylim([-10,10])
 
 laser_dir = data_path + '/laser/'
 pose_dir = data_path + '/pose/'
+depth_dir = data_path + '/depth/'
 # out_directory = data_path + '/laser_fov/'
 i = 0
 for filename in os.listdir(laser_dir):
     if filename.endswith(".npy"):
         # print(os.path.join(directory, filename))
-        print(filename)
+        # print(filename)
         laser_in = np.load(laser_dir+filename)
         pose_in = np.load(pose_dir+filename)
-        # laser(laser_in, pose_in)
-        # plt.plot([pose_in[0], np.cos(pose_in[2])],[pose_in[1], np.sin(pose_in[2])], '-o')
+        depth_in = np.load(depth_dir+filename)
+        # depth_in[np.isnan(depth_in)] = 10
+        # print depth_in
+        laser(laser_in, pose_in)
+        depth(depth_in, pose_in)
+        # plt.plot([pose_in[0], pose_in[0]+np.cos(pose_in[2])],[pose_in[1], pose_in[1]+np.sin(pose_in[2])], '-o')
         # plt.draw()
-        print(pose_in)
-        # plt.pause(0.01)
-        # if i > 150:
-            # plt.close()
-            # break
+        # print(pose_in)
+        plt.pause(0.05)
+        print pose_in
         i = i + 1
+        if i > 0:
+            break
+            # plt.close()
         # f = interp1d(laser_angle, depth_in[::-1],kind='linear')
         # data_out = f(angle)
         # np.save(out_directory+filename,data_out)
-        continue
-    else:
-        continue
+        # continue
+    # else:
+    #     continue
 
-plt.close()
+# plt.close()
