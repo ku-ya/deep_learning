@@ -12,6 +12,8 @@ from sklearn.neighbors import NearestNeighbors
 import math
 import bcolz
 from utils import *
+import pandas as pd
+from mpl_toolkits.mplot3d import Axes3D
 # fname = '1487017469966396563'
 def icp(a, b, init_pose=(0,0,0), no_iterations = 13):
     src = np.array([a.T], copy=True).astype(np.float32)
@@ -144,6 +146,7 @@ def icp(a, b, init_pose=(0,0,0), no_iterations = 13):
 def depth(data, pose):
     r = np.mean(data,axis=0)
     N = len(r)
+    pdb.set_trace()
     resol = 0.0906
     angle_range = resol*N/180*np.pi
     angle = np.linspace(-1./2*angle_range, 1./2*angle_range,N, endpoint=True) - pose[2]
@@ -203,10 +206,18 @@ for filename in os.listdir(laser_dir):
         laser_fov = laser_fov[::-1]
         depth_in[depth_in>4] = float('nan')
 
-        depth_array.append(depth_in)
+        depth_in = pd.DataFrame(depth_in)
+        depth_in = depth_in.fillna(method='ffill',axis=1)
+        depth_in = depth_in.fillna(method='bfill',axis=1)
+        laser_fov = pd.Series(laser_fov)
+        laser_fov = laser_fov.fillna(method='ffill')
+        laser_fov = laser_fov.fillna(method='bfill')
+
+        depth_array.append(depth_in.values.tolist())
         pose_array.append(pose_in)
         laser_array.append(laser_fov)
         rgb_array.append(rgb_in)
+
 
 
         # depth_in[np.isnan(depth_in)] = 10
@@ -221,8 +232,18 @@ for filename in os.listdir(laser_dir):
         if round(i%50) ==0:
             plt.plot(pose_in[1],pose_in[0],'sk')
             laser(laser_fov, pose_in)
+            # depth_in = pd.DataFrame(depth_in)
+            # depth_in = depth_in.fillna(method='ffill',axis=1)
+            # depth_in = depth_in.fillna(method='bfill',axis=1)
             depth(depth_in, pose_in)
-            plt.pause(1)
+            # plt.pause(1)
+            # data = np.mean(depth_in,axis=0)
+
+            # x, y = np.mgrid[:data.shape[0], :data.shape[1]]
+            # fig = plt.figure()
+            # ax = fig.add_subplot(1,1,1,projection="3d")
+            # surf=ax.plot_surface(x,y,data)
+            # plt.show()
             plt.clf()
             # fig.canvas.draw()
             # print pose_in
@@ -235,6 +256,7 @@ for filename in os.listdir(laser_dir):
         # continue
     # else:
     #     continue
+
 
 print 'Read data time: ' + str(time.clock() - tic)
 pose_array = np.array(pose_array)

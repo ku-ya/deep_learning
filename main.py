@@ -6,18 +6,44 @@ import time
 # import imageio
 from keras.models import model_from_json
 import bcolz
+import pdb
+import tensorflow as tf
+import pandas as pd
+from keras.callbacks import LearningRateScheduler
 
 
+# print np.argwhere(np.isnan(depth))
+# sys.exit()
 
-data_path = 'data/sensor_pos_data/'
-tic = time.clock()
-pose = load_array(data_path+'pose.dat')
-laser = load_array(data_path+'laser.dat')
-rgb = load_array(data_path+'rgb.dat')
-depth = load_array(data_path+'depth.dat')
-print 'time to load data: ' + str(time.clock() - tic)
+# print 'time to load data: ' + str(time.clock() - tic)
 
-vgg_mean = np.array([123.68, 116.779, 103.939], dtype=np.float32).reshape((3,1,1))
+# vgg_mean = np.array([123.68, 116.779, 103.939], dtype=np.float32).reshape((3,1,1))
+
+def depth_plot(data, pose):
+    r = np.mean(data.T,axis=0)
+    N = len(r)
+    resol = 0.0906
+    angle_range = resol*N/180*np.pi
+    angle = np.linspace(-1./2*angle_range, 1./2*angle_range,N, endpoint=True) - pose[2]
+    plt.plot(- pose[0] + r*np.cos(angle), - pose[1] + r*np.sin(angle),'g')
+
+def laser_plot(data, pose):
+    r = data
+    N = len(data)
+    resol = 0.25
+    laser_angle_range = resol*N/180*np.pi
+    angle_offset = -18./180*np.pi
+    laser_angle = np.linspace(-1./2*laser_angle_range, 1./2*laser_angle_range, N, endpoint=True) - pose[2]
+    plt.plot(r*np.cos(laser_angle) - pose[0], r*np.sin(laser_angle) - pose[1],'b')
+def laser_plot2(data, pose):
+    r = data
+    N = len(data)
+    resol = 0.25
+    laser_angle_range = resol*N/180*np.pi
+    angle_offset = -18./180*np.pi
+    laser_angle = np.linspace(-1./2*laser_angle_range, 1./2*laser_angle_range, N, endpoint=True) - pose[2]
+    plt.plot(r*np.cos(laser_angle) - pose[0], r*np.sin(laser_angle) - pose[1], 'r')
+
 def main():
     seed = 7
     np.random.seed(seed)
@@ -28,6 +54,24 @@ def main():
     DATA_HOME_DIR = folderLocation+'/data/sensor_data/'
     train_path = DATA_HOME_DIR+'train/'
     valid_path = DATA_HOME_DIR+'valid/'
+
+
+    data_path = 'data/sensor_pos_data/'
+    # tic = time.clock()
+    pose = load_array(data_path+'pose.dat')
+    laser = load_array(data_path+'laser.dat')
+    rgb = load_array(data_path+'rgb.dat')
+    depth = load_array(data_path+'depth.dat')
+    depth = depth[..., None]
+    pose = pose[...,None]
+
+    print 'pose size: ' + str(pose.shape)
+
+    cut_off = laser.shape[0]
+    depth_s = depth[:cut_off,:,:,:]
+    rgb_s = rgb[:cut_off,:,:,:]
+    laser_s = laser[:cut_off,:]
+    pose_s = pose[:cut_off,:]
 
     # train_datagen = image.ImageDataGenerator(
     #     rescale=1./255,
@@ -41,133 +85,87 @@ def main():
     rgb_train = rgb
 
     directory = train_path+'rgb/'
-    i = 0
-    for filename in os.listdir(directory):
-        if filename.endswith(".jpg"):
-            # print(os.path.join(directory, filename))
-            # print(filename)
-            image = imageio.imread(directory+filename).T
 
-            for j in range(64):
-                rgbd_train[i+j,:,:,:] = image[:,j*10:(j+1)*10,:]
-            i = i + 64
-            continue
-        else:
-            continue
+    batch_size = 64
+    no_of_epochs = 20
 
-    # print("Training rgb shape: " )
-    depth_array = np.empty([N*64, 1, 10, 10])
-    directory = train_path+'depth/'
-    i = 0
-    for filename in os.listdir(directory):
-        if filename.endswith(".npy"):
-            # print(os.path.join(directory, filename))
-            # print(filename)
-            # rgbd_train[i,3,:] = np.load(directory+filename)
-            image = np.load(directory+filename).T
-            # print(image.shape)
-            for j in range(64):
-                depth_array[j+i,0,:,:] =  image[j*10:(j+1)*10,:]
-            i = i + 64
-            continue
-        else:
-            continue
-    # print('Depth train size: '+str(depth_array.shape))
-    print('depth train size: '+str(depth_array.shape))
-    print('rgb train size: '+str(rgbd_train.shape))
 
     laser_array = np.empty([N*64, 10])
-    i = 0
-    directory = train_path+'laser_fov/'
-    for filename in os.listdir(directory):
-        if filename.endswith(".npy"):
-            # print(os.path.join(directory, filename))
-            # print(filename)
-            laser_array[i*64:(i+1)*64,:] = np.load(directory+filename).reshape([64,10])
-            i = i + 1
-            continue
-        else:
-            continue
-    print('Laser train size: '+ str(laser_array.shape))
 
+    pose_model = Sequential()
+    # pose_model.add(BatchNormalization(axis=1,input_shape=(3,1)))
+    pose_model.add(Dense(1, input_shape=(3,1), activation='linear'))
+    pose_model.add(Flatten())
 
     depth_model = Sequential()
-    depth_model.add(BatchNormalization(axis=1,input_shape=(1,10, 10)))
-    depth_model.add(Dense(10, activation='relu'))
-    depth_model.add(Convolution2D(32, 3, 3, border_mode='same', activation='relu',dim_ordering = 'th'))
-    # depth_model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    depth_model.add(BatchNormalization(axis=1,input_shape=(10, 640,1)))
+    depth_model.add(Convolution2D(32, 3, 3, border_mode='same', activation='relu',dim_ordering = 'tf'))
+    depth_model.add(MaxPooling2D((2, 2), strides=(2, 2)))
     depth_model.add(BatchNormalization())
-    # depth_model.add(MaxPooling1D(2,stride=2))
-    # depth_model.add(Dropout(0.2))
-    # depth_model.add(Convolution1D(nb_filter=64,
-    #                               filter_length=3,
-    #                               border_mode='same',
-    #                               activation='relu'))
-    # depth_model.add(MaxPooling1D(2,stride=2))
-    # depth_model.add(Dropout(0.2))
-    # depth_model.add(Convolution1D(nb_filter=128,
-    #                               filter_length=3,
-    #                               border_mode='same',
-    #                               activation='relu'))
-    # depth_model.add(MaxPooling1D(2,stride=2))
-    # depth_model.add(BatchNormalization())
-    # depth_model.add(Dense(640, input_dim=640, init='he_normal', activation='relu'))
-    # depth_model.add(Convolution2D(32, 3, 1,border_mode='same',activation='relu'))
+    depth_model.add(Convolution2D(64, 3, 3, border_mode='same', activation='relu',dim_ordering = 'tf'))
+    depth_model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    depth_model.add(BatchNormalization())
+    depth_model.add(Convolution2D(64, 1, 3, border_mode='same', activation='relu',dim_ordering = 'tf'))
+    depth_model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    depth_model.add(BatchNormalization())
+    depth_model.add(Convolution2D(64, 1, 3, border_mode='same', activation='relu',dim_ordering = 'tf'))
+    depth_model.add(MaxPooling2D((1, 2), strides=(1, 2)))
+    depth_model.add(BatchNormalization())
+    # depth_model.add(Dense(1, activation='relu'))
     depth_model.add(Flatten())
-    # depth_model.add(Dense(1000,activation='relu'))
-    # depth_model.add(BatchNormalization())
-    # depth_model.add(Dropout(0.5))
-    # depth_model.add(Dense(640,activation='linear'))
-
-    # depth_model.summary()
-    batch_size = 6400
-    no_of_epochs = 10
-    # depth_model.fit(depth_array, laser_array, nb_epoch=no_of_epochs, batch_size=batch_size)
-
 
 
     model = Sequential()
-    model.add(BatchNormalization(axis=1,input_shape=(3, 10, 10)))
-    model.add(Convolution2D(32, 3, 3, border_mode='same', input_shape=(3, 10, 10), dim_ordering = 'th',activation='relu'))
-    model.add(MaxPooling2D((2, 2), strides=(2, 2), dim_ordering = 'th'))
-    # model.add(BatchNormalization())
-    # model.add(Convolution2D(32, 3, 3, border_mode='same', activation='relu', dim_ordering = 'th' ))
-    # model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    model.add(BatchNormalization(axis=1,input_shape=(10, 640,3)))
+    model.add(Convolution2D(32, 3, 3, border_mode='same', dim_ordering = 'tf',activation='relu'))
+    model.add(MaxPooling2D((2, 2), strides=(2, 2), dim_ordering = 'tf'))
     model.add(BatchNormalization())
-    # model.add(Convolution2D(64, 3, 1, border_mode='same',activation='relu'))
-    # model.add(MaxPooling2D((1, 2), strides=(1, 2)))
-    # model.add(BatchNormalization())
-    # model.add(Convolution2D(128, 3, 1, border_mode='same',activation='relu'))
-    # model.add(MaxPooling2D((1, 2), strides=(1, 2)))
-    # model.add(BatchNormalization())
-    #
-    # model.add(Dropout(0.5))
-
-
+    model.add(Convolution2D(32, 3, 3, border_mode='same', activation='relu', dim_ordering = 'tf' ))
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    model.add(BatchNormalization())
+    model.add(Convolution2D(64, 3, 3, border_mode='same', activation='relu', dim_ordering = 'tf' ))
+    model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+    model.add(BatchNormalization())
+    model.add(Convolution2D(64, 3, 3, border_mode='same', activation='relu', dim_ordering = 'tf' ))
+    model.add(MaxPooling2D((1, 2), strides=(1, 2)))
+    model.add(BatchNormalization())
+    model.add(Convolution2D(64, 3, 3, border_mode='same', activation='relu', dim_ordering = 'tf' ))
+    model.add(MaxPooling2D((1, 2), strides=(1, 2)))
+    model.add(BatchNormalization())
     model.add(Flatten())
 
-
-    # model.add(Dense(640,activation='relu'))
-    # model.add(Dropout(0.5))
-    # model.add(Dense(640,activation='linear'))
-    # sgd = SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
-    # model.compile(loss='mean_squared_error', optimizer=sgd)
-    #
     final_model = Sequential()
-    merge = Merge([depth_model, model],mode='concat')
-
+    merge = Merge([depth_model, model, pose_model],mode='concat')
     final_model.add(merge)
-    final_model.add(Dense(1000, activation='linear'))
-    final_model.add(Dense(10, activation='linear'))
+    # final_model.add(BatchNormalization())
+    # final_model.add(Dense(10000, activation='relu'))
+    final_model.add(Dense(laser.shape[1], activation='linear'))
     final_model.summary()
+
+    def step_decay(epoch):
+    	initial_lrate = 0.1
+    	drop = 0.5
+    	epochs_drop = 10.0
+    	lrate = initial_lrate * math.pow(drop, math.floor((1+epoch)/epochs_drop))
+    	return lrate
     # final_model.load_weights('models/model_weights_1.h5')
-    sgd = SGD(lr=0.01, decay=1e-4, momentum=0.9, nesterov=True)
-    rms = RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)
-    final_model.compile(loss='mae', optimizer=sgd)
-    final_model.fit([depth_array, rgbd_train], laser_array, nb_epoch=no_of_epochs, batch_size=batch_size)
+    sgd = SGD(lr=0.0, decay=1e-4, momentum=0.9, nesterov=True)
+    # rms = RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)
+
+
+    def mean_squared_error_exp(y_true, y_pred):
+        return K.mean(K.square(y_pred - y_true)*tf.exp(-tf.abs(y_true)/(1.5**2)), axis=-1)
+    final_model.compile(loss=mean_squared_error_exp, optimizer=sgd)
+
+    tbCallback=keras.callbacks.TensorBoard(log_dir='./logs', histogram_freq=0, write_graph=True, write_images=False)
+
+    lrate = LearningRateScheduler(step_decay)
+    final_model.fit([depth_s, rgb_s, pose_s], laser_s, validation_split = 0.3,nb_epoch=no_of_epochs, batch_size=batch_size,callbacks=[tbCallback, lrate])
     #
     #
-    final_model.save_weights('models/model_weights_1.h5')
+    final_model.save_weights('models/model_weights_200epoch.h5')
+
+    # pdb.set_trace()
 
     # serialize model to JSON
     model_json = final_model.to_json()
@@ -176,19 +174,12 @@ def main():
     # serialize weights to HDF5
     final_model.save_weights("models/model.h5")
     print("Saved model to disk")
-
-    #
-
     # batch_size = 64
     # no_of_epochs = 5
     #
     # model.fit(rgbd_train, laser_array, nb_epoch=no_of_epochs, batch_size=batch_size)
     #
     # no_of_epochs = 20
-
-
-
-
     # hl, = plt.plot([], [])
 
     # directory = valid_path+'depth/'
@@ -204,13 +195,29 @@ def main():
     #         # print(filename)
     #         actual = np.load(laser_directory+filename).reshape(1,640)
     #         valid_array[0,3,:,0] = np.load(directory+filename).reshape(1,640)
-    #         result = model.predict(valid_array)
+# def predict():
+#     filename = 'models/model.json'
+#     with open(filename,'r') as f:
+#         data = json.loads(f.read())
+#         model = model_from_json(data)
+    # pdb.set_trace()
+    N = 750
+    tic = time.clock()
+    result = final_model.predict([depth[N:N+1,:,:,:], rgb[N:N+1,:,:,:], pose[N:N+1,:,:]])
+    print time.clock() - tic
+
     #         print("prediction!")
     #         print(result.shape)
     #         plt.plot(actual[0],'ro')
     #         plt.plot(result[0],'x')
-    #         plt.plot(valid_array[0,3,:,0],'go')
-    #         plt.show()
+    pose = [0.,0.,0.]
+
+    result_filter = pd.rolling_mean(result[0], 10)
+    depth_plot(np.mean(depth[N,:,:,:],axis=0),pose)
+    laser_plot(laser[N,:],pose)
+    laser_plot2(result_filter,pose)
+    plt.plot(0,0,'ok')
+    plt.show()
     #         time.sleep(0.2)
     #         break
     #
@@ -246,3 +253,4 @@ def ConvBlock(model, layers, filters):
 
 if __name__ == "__main__":
     main()
+    # predict()
