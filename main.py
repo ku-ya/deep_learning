@@ -131,7 +131,7 @@ def main():
 
     result_filter = pd.rolling_mean(result[0], 10)
     depth_plot(np.mean(depth[N,:,:,:],axis=0),pose)
-    laser_plot(laser[N,:],pose)
+    vi.laser_plot(laser[N,:],pose)
     laser_plot2(result_filter,pose)
     plt.plot(0,0,'ok')
     plt.show()
