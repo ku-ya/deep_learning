@@ -83,7 +83,7 @@ class keras_model(object):
         self.pose_model = self.create_pose_model()
         self.conv_model = self.create_conv_model()
         self.depth_model = self.create_depth_model()
-        self.final_model = self.create_final_model(self.pose_model, self.conv_model, self.depth_model)
+        self.final_model = self.create_final_model(self.depth_model, self.conv_model, self.pose_model)
 
     def create_pose_model(self):
         pose_model = Sequential()
