@@ -62,7 +62,7 @@ def main():
 
     # final_model.load_weights('models/model_weights_1.h5')
     # rms = RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)
-    print [depth_s, rgb_s, pose_s].shape
+
     km.final_model.fit([depth_s, rgb_s, pose_s], laser_s, validation_split = 0.3,nb_epoch=no_of_epochs, batch_size=batch_size,callbacks=[km.tbCallback, km.lrate])
     km.final_model.save_weights('models/model_weights_200epoch.h5')
 
