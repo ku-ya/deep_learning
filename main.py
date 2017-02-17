@@ -58,28 +58,12 @@ def main():
 
 
     laser_array = np.empty([N*64, 10])
+    km.compile()
 
-    def step_decay(epoch):
-    	initial_lrate = 0.1
-    	drop = 0.5
-    	epochs_drop = 10.0
-    	lrate = initial_lrate * math.pow(drop, math.floor((1+epoch)/epochs_drop))
-    	return lrate
     # final_model.load_weights('models/model_weights_1.h5')
-    sgd = SGD(lr=0.0, decay=1e-4, momentum=0.9, nesterov=True)
     # rms = RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)
-
-
-    def mean_squared_error_exp(y_true, y_pred):
-        return K.mean(K.square(y_pred - y_true)*tf.exp(-tf.abs(y_true)/(1.5**2)), axis=-1)
-    km.final_model.compile(loss=mean_squared_error_exp, optimizer=sgd)
-
-    tbCallback=keras.callbacks.TensorBoard(log_dir='./logs', histogram_freq=0, write_graph=True, write_images=False)
-
-    lrate = LearningRateScheduler(step_decay)
-    km.final_model.fit([depth_s, rgb_s, pose_s], laser_s, validation_split = 0.3,nb_epoch=no_of_epochs, batch_size=batch_size,callbacks=[tbCallback, lrate])
-    #
-    #
+    print [depth_s, rgb_s, pose_s].shape
+    km.final_model.fit([depth_s, rgb_s, pose_s], laser_s, validation_split = 0.3,nb_epoch=no_of_epochs, batch_size=batch_size,callbacks=[km.tbCallback, km.lrate])
     km.final_model.save_weights('models/model_weights_200epoch.h5')
 
     # pdb.set_trace()
@@ -130,9 +114,9 @@ def main():
     pose = [0.,0.,0.]
 
     result_filter = pd.rolling_mean(result[0], 10)
-    depth_plot(np.mean(depth[N,:,:,:],axis=0),pose)
+    vi.depth_plot(np.mean(depth[N,:,:,:],axis=0),pose)
     vi.laser_plot(laser[N,:],pose)
-    laser_plot2(result_filter,pose)
+    vi.laser_plot2(result_filter,pose)
     plt.plot(0,0,'ok')
     plt.show()
     #         time.sleep(0.2)

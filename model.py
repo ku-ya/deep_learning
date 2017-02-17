@@ -74,6 +74,9 @@ class keras_model(object):
         self.depth_model = None
         self.final_model = None
         self.output_shape = output_shape
+        self.sgd = SGD(lr=0.0, decay=1e-4, momentum=0.9, nesterov=True)
+        self.tbCallback=keras.callbacks.TensorBoard(log_dir='./logs', histogram_freq=0, write_graph=True, write_images=False)
+        self.lrate = LearningRateScheduler(self.step_decay)
         self.init_model()
 
     def init_model(self):
@@ -138,6 +141,19 @@ class keras_model(object):
         final_model.add(Dense(self.output_shape, activation='linear'))
         final_model.summary()
         return final_model
+
+    def step_decay(self,epoch):
+    	initial_lrate = 0.1
+    	drop = 0.5
+    	epochs_drop = 10.0
+    	lrate = initial_lrate * math.pow(drop, math.floor((1+epoch)/epochs_drop))
+    	return lrate
+
+    def mean_squared_error_exp(self, y_true, y_pred):
+        return K.mean(K.square(y_pred - y_true)*tf.exp(-tf.abs(y_true)/(1.5**2)), axis=-1)
+
+    def compile(self):
+        self.final_model.compile(loss=self.mean_squared_error_exp, optimizer=self.sgd)
 
 if __name__ == "__main__":
     pass
