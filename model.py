@@ -48,30 +48,27 @@ class data_handler(object):
     def __init__(self):
         super(data_handler, self).__init__()
 
-    def load(self, data_path='data/sensor_pos_data/', pose_fname='pose.dat', laser_fname='laser.dat', rgb_fname='rgb.dat', depth_fname='depth.dat'):
-        pose = None
+    def load(self, data_path='data/sensor/', laser_fname='laser.dat', rgb_fname='rgb.dat', depth_fname='depth.dat'):
         laser = None
         rgb = None
         depth = None
         try:
-            pose = load_array(data_path+'pose.dat')
             laser = load_array(data_path+'laser.dat')
             rgb = load_array(data_path+'rgb.dat')
             depth = load_array(data_path+'depth.dat')
             depth = depth[..., None]
-            pose = pose[...,None]
-            return (pose, laser, rgb, depth, True)
+            return (laser, rgb, depth, True)
         except Exception as e:
             print "Exception caught:", e
-            return (pose, laser, rgb, depth, False)
+            return (laser, rgb, depth, False)
 
 class keras_model(object):
     """docstring for keras_model."""
     def __init__(self, output_shape):
         super(keras_model, self).__init__()
-        self.pose_model = None
         self.conv_model = None
         self.depth_model = None
+        self.depth_model_merge = None
         self.final_model = None
         self.output_shape = output_shape
         self.sgd = SGD(lr=0.0, decay=1e-4, momentum=0.9, nesterov=True)
@@ -80,64 +77,68 @@ class keras_model(object):
         self.init_model()
 
     def init_model(self):
-        self.pose_model = self.create_pose_model()
         self.conv_model = self.create_conv_model()
         self.depth_model = self.create_depth_model()
-        self.final_model = self.create_final_model(self.depth_model, self.conv_model, self.pose_model)
-
-    def create_pose_model(self):
-        pose_model = Sequential()
-        # pose_model.add(BatchNormalization(axis=1,input_shape=(3,1)))
-        pose_model.add(Dense(1, input_shape=(3,1), activation='linear'))
-        pose_model.add(Flatten())
-        return pose_model
+        self.final_model = self.create_final_model(self.depth_model, self.conv_model)
 
     def create_depth_model(self):
         depth_model = Sequential()
         depth_model.add(BatchNormalization(axis=1,input_shape=(10, 640,1)))
-        depth_model.add(Convolution2D(32, 3, 3, border_mode='same', activation='relu',dim_ordering = 'tf'))
-        depth_model.add(MaxPooling2D((2, 2), strides=(2, 2)))
-        depth_model.add(BatchNormalization())
-        depth_model.add(Convolution2D(64, 3, 3, border_mode='same', activation='relu',dim_ordering = 'tf'))
-        depth_model.add(MaxPooling2D((2, 2), strides=(2, 2)))
-        depth_model.add(BatchNormalization())
-        depth_model.add(Convolution2D(64, 1, 3, border_mode='same', activation='relu',dim_ordering = 'tf'))
-        depth_model.add(MaxPooling2D((2, 2), strides=(2, 2)))
-        depth_model.add(BatchNormalization())
-        depth_model.add(Convolution2D(64, 1, 3, border_mode='same', activation='relu',dim_ordering = 'tf'))
-        depth_model.add(MaxPooling2D((1, 2), strides=(1, 2)))
-        depth_model.add(BatchNormalization())
-        # depth_model.add(Dense(1, activation='relu'))
+        # depth_i_model = Sequential()
+        # depth_i_model.add(depth_model)
+        depth_model.add(AveragePooling2D((2, 1), strides=(2, 1)))
+        # depth_i_model.add(BatchNormalization())
+        #
+        # depth_model.add(Convolution2D(32, 3, 3, border_mode='same', activation='relu',dim_ordering = 'tf'))
+        # depth_model.add(Convolution2D(32, 3, 3, border_mode='same', activation='relu',dim_ordering = 'tf'))
+        # depth_model.add(AveragePooling2D((2, 2), strides=(2, 2)))
+        # depth_model.add(BatchNormalization())
+        # depth_model.add(Convolution2D(64, 3, 3, border_mode='same', activation='relu',dim_ordering = 'tf'))
+        # # depth_model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+        # # depth_model.add(BatchNormalization())
+        # # depth_model.add(Convolution2D(256, 3, 3, border_mode='same', activation='relu',dim_ordering = 'tf'))
+        # depth_model.add(Convolution2D(320, 3, 3, border_mode='same', activation='relu',dim_ordering = 'tf'))
+        # depth_model.add(AveragePooling2D((5, 64), strides=(5, 64)))
+        #
+        # depth_model.add(Reshape((5,320,1)))
+        # depth_model.add(BatchNormalization())
         depth_model.add(Flatten())
+        # merge_model = Sequential()
+        # merge_model.add(Merge([depth_model, depth_i_model], mode='sum', concat_axis=1))
+        # # merge_model.add(BatchNormalization())
+        # merge_model.add(Flatten())
         return depth_model
 
     def create_conv_model(self):
         model = Sequential()
         model.add(BatchNormalization(axis=1,input_shape=(10, 640,3)))
         model.add(Convolution2D(32, 3, 3, border_mode='same', dim_ordering = 'tf',activation='relu'))
-        model.add(MaxPooling2D((2, 2), strides=(2, 2), dim_ordering = 'tf'))
-        model.add(BatchNormalization())
-        model.add(Convolution2D(32, 3, 3, border_mode='same', activation='relu', dim_ordering = 'tf' ))
-        model.add(MaxPooling2D((2, 2), strides=(2, 2)))
-        model.add(BatchNormalization())
+        # model.add(MaxPooling2D((2, 2), strides=(2, 2), dim_ordering = 'tf'))
+        # model.add(BatchNormalization())
         model.add(Convolution2D(64, 3, 3, border_mode='same', activation='relu', dim_ordering = 'tf' ))
         model.add(MaxPooling2D((2, 2), strides=(2, 2)))
         model.add(BatchNormalization())
         model.add(Convolution2D(64, 3, 3, border_mode='same', activation='relu', dim_ordering = 'tf' ))
-        model.add(MaxPooling2D((1, 2), strides=(1, 2)))
+        # model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+        # model.add(BatchNormalization())
+        model.add(Convolution2D(128, 1, 1, border_mode='same', activation='relu', dim_ordering = 'tf' ))
+        model.add(MaxPooling2D((4, 4), strides=(4, 4)))
         model.add(BatchNormalization())
-        model.add(Convolution2D(64, 3, 3, border_mode='same', activation='relu', dim_ordering = 'tf' ))
-        model.add(MaxPooling2D((1, 2), strides=(1, 2)))
-        model.add(BatchNormalization())
+        # model.add(MaxPooling2D((1, 4), strides=(1, 4)))
+        # model.add(BatchNormalization())
+        # model.add(Convolution2D(128, 3, 3, border_mode='same', activation='relu', dim_ordering = 'tf' ))
+        # model.add(MaxPooling2D((2, 2), strides=(2, 2)))
+        # model.add(BatchNormalization())
         model.add(Flatten())
         return model
 
-    def create_final_model(self, depth_model, model, pose_model):
+    def create_final_model(self, depth_model, model):
         final_model = Sequential()
-        merge = Merge([depth_model, model, pose_model],mode='concat')
+        merge = Merge([depth_model, model],mode='concat')
         final_model.add(merge)
-        # final_model.add(BatchNormalization())
-        # final_model.add(Dense(10000, activation='relu'))
+        final_model.add(BatchNormalization())
+        final_model.add(Dense(1024, activation='relu'))
+        final_model.add(Dense(1024, activation='relu'))
         final_model.add(Dense(self.output_shape, activation='linear'))
         final_model.summary()
         return final_model
@@ -153,7 +154,7 @@ class keras_model(object):
         return K.mean(K.square(y_pred - y_true)*tf.exp(-tf.abs(y_true)/(1.5**2)), axis=-1)
 
     def compile(self):
-        self.final_model.compile(loss=self.mean_squared_error_exp, optimizer=self.sgd)
+        self.final_model.compile(loss='mape', optimizer = self.sgd)
 
 if __name__ == "__main__":
     pass

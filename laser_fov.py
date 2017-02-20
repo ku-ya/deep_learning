@@ -11,7 +11,7 @@ import rosbag
 from sklearn.neighbors import NearestNeighbors
 import math
 import bcolz
-from utils import *
+# from utils import *
 import pandas as pd
 from mpl_toolkits.mplot3d import Axes3D
 # fname = '1487017469966396563'
@@ -146,7 +146,6 @@ def icp(a, b, init_pose=(0,0,0), no_iterations = 13):
 def depth(data, pose):
     r = np.mean(data,axis=0)
     N = len(r)
-    pdb.set_trace()
     resol = 0.0906
     angle_range = resol*N/180*np.pi
     angle = np.linspace(-1./2*angle_range, 1./2*angle_range,N, endpoint=True) - pose[2]
@@ -169,7 +168,7 @@ def laser(data, pose):
 
 # fig = plt.figure()
 
-data_path = 'data/sensor_pos_data/'
+data_path = ''
 plt.grid(True)
 plt.axis('equal')
 axes = plt.gca()
@@ -177,11 +176,9 @@ axes.set_xlim([0, 4])
 axes.set_ylim([-2,2])
 
 laser_dir = data_path + 'laser/'
-pose_dir = data_path + 'pose/'
 depth_dir = data_path + 'depth/'
 rgb_dir = data_path + 'rgb/'
 
-pose_array = []
 laser_array = []
 depth_array = []
 rgb_array = []
@@ -195,16 +192,22 @@ for filename in os.listdir(laser_dir):
         # print(filename)
 
         laser_in = np.load(laser_dir+filename)
-        pose_in = np.load(pose_dir+filename)
-        depth_in = np.load(depth_dir+filename)
+        depth_in = np.load(depth_dir+filename)*0.001
         rgb_in  = cv2.imread(rgb_dir+filename[:-3]+'jpg')
 
+        # print rgb_in.shape
         laser_in[laser_in>10] = float('nan')
+        laser_in[laser_in<0.1] = float('nan')
 
         laser_fov = laser_in[round(len(laser_in)*(1./2-58./270/2)):
                              round(len(laser_in)*(1./2+58./270/2))]
         laser_fov = laser_fov[::-1]
-        depth_in[depth_in>4] = float('nan')
+
+        # depth_in[depth_in>4] = float('nan')
+        depth_in[depth_in<0.3] = float('nan')
+        depth_in = depth_in[240-20:240+20,:]
+        # depth_in = np.mean(depth_in,axis = 0)
+        rgb_in = rgb_in[240-20:240+20,:,:]
 
         depth_in = pd.DataFrame(depth_in)
         depth_in = depth_in.fillna(method='ffill',axis=1)
@@ -213,8 +216,9 @@ for filename in os.listdir(laser_dir):
         laser_fov = laser_fov.fillna(method='ffill')
         laser_fov = laser_fov.fillna(method='bfill')
 
+        # laser_fov = laser_fov - laser_fov.mean()
+        # depth_in = depth_in - depth_in.mean()
         depth_array.append(depth_in.values.tolist())
-        pose_array.append(pose_in)
         laser_array.append(laser_fov)
         rgb_array.append(rgb_in)
 
@@ -229,14 +233,16 @@ for filename in os.listdir(laser_dir):
         # print(pose_in)
         # plt.pause(0.05)
         # print pose_in
-        if round(i%50) ==0:
-            plt.plot(pose_in[1],pose_in[0],'sk')
-            laser(laser_fov, pose_in)
+        # if round(i%10) ==0:
+            # plt.plot(0,0,'sk')
+            # pose_in = [0,0,0]
+            # laser(laser_fov, pose_in)
             # depth_in = pd.DataFrame(depth_in)
             # depth_in = depth_in.fillna(method='ffill',axis=1)
             # depth_in = depth_in.fillna(method='bfill',axis=1)
-            depth(depth_in, pose_in)
-            # plt.pause(1)
+            # depth(depth_in, pose_in)
+            # print depth_in.shape
+            # plt.pause(2)
             # data = np.mean(depth_in,axis=0)
 
             # x, y = np.mgrid[:data.shape[0], :data.shape[1]]
@@ -244,10 +250,13 @@ for filename in os.listdir(laser_dir):
             # ax = fig.add_subplot(1,1,1,projection="3d")
             # surf=ax.plot_surface(x,y,data)
             # plt.show()
-            plt.clf()
+            # plt.clf()
+            # pdb.set_trace()
             # fig.canvas.draw()
             # print pose_in
         i = i + 1
+        if i%100==0:
+            print i
             # break
             # plt.close()
         # f = interp1d(laser_angle, depth_in[::-1],kind='linear')
@@ -257,20 +266,28 @@ for filename in os.listdir(laser_dir):
     # else:
     #     continue
 
+# sys.exit()
+
+def save_array(fname, arr):
+    c=bcolz.carray(arr, rootdir=fname, mode='w')
+    c.flush()
+def load_array(fname):
+    return bcolz.open(fname)[:]
 
 print 'Read data time: ' + str(time.clock() - tic)
-pose_array = np.array(pose_array)
+# pose_array = np.array(pose_array)
 laser_array = np.array(laser_array)
 rgb_array = np.array(rgb_array)
 depth_array = np.array(depth_array)
 
-print 'pose array size: ' + str(pose_array.shape)
+# print 'pose array size: ' + str(pose_array.shape)
 print 'laser array size: ' + str(laser_array.shape)
 print 'RGB array size: ' + str(rgb_array.shape)
 print 'Depth array size: ' + str(depth_array.shape)
 
 tic = time.clock()
-save_array(data_path+'pose.dat', pose_array)
+data_path = 'data/sensor/'
+# save_array(data_path+'pose.dat', pose_array)
 save_array(data_path+'laser.dat', laser_array)
 save_array(data_path+'rgb.dat', rgb_array)
 save_array(data_path+'depth.dat', depth_array)
