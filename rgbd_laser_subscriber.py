@@ -31,7 +31,7 @@ class image_converter:
   def callback(self,depth_data, rgb_data, laser_data):
     global counter
     try:
-      rgb_image = self.bridge.imgmsg_to_cv2(rgb_data, "passthrough")
+      rgb_image = self.bridge.imgmsg_to_cv2(rgb_data, "rgb8")
       depth_image = self.bridge.imgmsg_to_cv2(depth_data, "passthrough")
       # ir_image = self.bridge.imgmsg_to_cv2(ir_data, "passthrough")
     except CvBridgeError as e:

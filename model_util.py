@@ -20,28 +20,30 @@ class visualization(object):
     def depth_plot(self, data, pose):
         r = np.mean(data.T,axis=0)
         N = len(r)
-        resol = 0.0906
+        resol = 58./N
         angle_range = resol*N/180*np.pi
         angle = np.linspace(-1./2*angle_range, 1./2*angle_range,N, endpoint=True) - pose[2]
         plt.plot(- pose[0] + r*np.cos(angle), - pose[1] + r*np.sin(angle),'g')
 
     def laser_plot(self, data, pose):
         r = data
-        N = len(data)
+        N = len(data[0])
         resol = 0.25
+        resol = 58./N
         laser_angle_range = resol*N/180*np.pi
-        angle_offset = -18./180*np.pi
+        # angle_offset = -18./180*np.pi
         laser_angle = np.linspace(-1./2*laser_angle_range, 1./2*laser_angle_range, N, endpoint=True) - pose[2]
         plt.plot(r*np.cos(laser_angle) - pose[0], r*np.sin(laser_angle) - pose[1],'b')
 
-    def laser_plot2(self, data, pose):
+    def laser_plot2(self, data, N_in, style):
         r = data
-        N = len(data)
+        N = N_in
         resol = 0.25
+        resol = 58./N
         laser_angle_range = resol*N/180*np.pi
-        angle_offset = -18./180*np.pi
-        laser_angle = np.linspace(-1./2*laser_angle_range, 1./2*laser_angle_range, N, endpoint=True) - pose[2]
-        plt.plot(r*np.cos(laser_angle) - pose[0], r*np.sin(laser_angle) - pose[1], 'r')
+        # angle_offset = -18./180*np.pi
+        laser_angle = np.linspace(-1./2*laser_angle_range, 1./2*laser_angle_range, N, endpoint=True)
+        plt.plot(r*np.cos(laser_angle) , r*np.sin(laser_angle) , style)
 
 class data_handler(object):
     """docstring for data_handler."""

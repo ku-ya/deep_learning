@@ -14,6 +14,7 @@ import bcolz
 # from utils import *
 import pandas as pd
 from mpl_toolkits.mplot3d import Axes3D
+from scipy import signal
 # fname = '1487017469966396563'
 def icp(a, b, init_pose=(0,0,0), no_iterations = 13):
     src = np.array([a.T], copy=True).astype(np.float32)
@@ -147,6 +148,7 @@ def depth(data, pose):
     r = np.mean(data,axis=0)
     N = len(r)
     resol = 0.0906
+
     angle_range = resol*N/180*np.pi
     angle = np.linspace(-1./2*angle_range, 1./2*angle_range,N, endpoint=True) - pose[2]
     plt.plot(- pose[0] + r*np.cos(angle), - pose[1] + r*np.sin(angle),'g-')
@@ -155,6 +157,7 @@ def laser(data, pose):
     r = data
     N = len(data)
     resol = 0.25
+    resol = 58./N
     laser_angle_range = resol*N/180*np.pi
     angle_offset = -18./180*np.pi
     laser_angle = np.linspace(-1./2*laser_angle_range, 1./2*laser_angle_range, N, endpoint=True) - pose[2]
@@ -215,6 +218,10 @@ for filename in os.listdir(laser_dir):
         laser_fov = pd.Series(laser_fov)
         laser_fov = laser_fov.fillna(method='ffill')
         laser_fov = laser_fov.fillna(method='bfill')
+        original_span = np.linspace(0,1,laser_fov.shape[0])
+        f = interp1d(original_span,laser_fov)
+        reduced_span = np.linspace(0,1,121)
+        laser_fov = f(reduced_span)
 
         # laser_fov = laser_fov - laser_fov.mean()
         # depth_in = depth_in - depth_in.mean()
@@ -241,6 +248,7 @@ for filename in os.listdir(laser_dir):
             # depth_in = depth_in.fillna(method='ffill',axis=1)
             # depth_in = depth_in.fillna(method='bfill',axis=1)
             # depth(depth_in, pose_in)
+            # break
             # print depth_in.shape
             # plt.pause(2)
             # data = np.mean(depth_in,axis=0)
@@ -255,8 +263,19 @@ for filename in os.listdir(laser_dir):
             # fig.canvas.draw()
             # print pose_in
         i = i + 1
-        if i%100==0:
+        print i
+        if i%40==-1:
+            plt.plot(0,0,'sk')
+            pose_in = [0,0,0]
+            laser(laser_fov, pose_in)
+            # depth_in = pd.DataFrame(depth_in)
+            # depth_in = depth_in.fillna(method='ffill',axis=1)
+            # depth_in = depth_in.fillna(method='bfill',axis=1)
+            depth(depth_in, pose_in)
+            plt.show()
+
             print i
+            break
             # break
             # plt.close()
         # f = interp1d(laser_angle, depth_in[::-1],kind='linear')
