@@ -11,39 +11,90 @@ import pdb
 import tensorflow as tf
 import pandas as pd
 from keras.callbacks import LearningRateScheduler
+import matplotlib.patches as patches
+from matplotlib.backends.backend_pdf import PdfPages
 
 class visualization(object):
-    """docstring for visualization."""
-    def __init__(self):
-        super(visualization, self).__init__()
+  """docstring for visualization."""
+  # fig = plt.figure(num=None, figsize=(3.45, 2.5), dpi=80)
 
-    def depth_plot(self, data, pose):
-        r = np.mean(data.T,axis=0)
-        N = len(r)
-        resol = 58./N
-        angle_range = resol*N/180*np.pi
-        angle = np.linspace(-1./2*angle_range, 1./2*angle_range,N, endpoint=True) - pose[2]
-        plt.plot(- pose[0] + r*np.cos(angle), - pose[1] + r*np.sin(angle),'g')
+  def __init__(self):
+    super(visualization, self).__init__()
+    # self.fig = plt.figure(num=None, figsize=(3.45, 2.5), dpi=80)
+    # self.ax = self.fig.add_subplot(111)
+    # self.fov((0.,0.), -30, 30,100,fill=True, color='blue')
 
-    def laser_plot(self, data, pose):
-        r = data
-        N = len(data[0])
-        resol = 0.25
-        resol = 58./N
-        laser_angle_range = resol*N/180*np.pi
-        # angle_offset = -18./180*np.pi
-        laser_angle = np.linspace(-1./2*laser_angle_range, 1./2*laser_angle_range, N, endpoint=True) - pose[2]
-        plt.plot(r*np.cos(laser_angle) - pose[0], r*np.sin(laser_angle) - pose[1],'b')
+  def start_fig(self, dim):
+    self.fig = plt.figure(num=None, figsize=dim, dpi=80)
+    self.ax = self.fig.add_subplot(1, 1, 1)
+    self.fov((0.,0.), -30, 30,100,fill=True, color='blue')
+    self.robot()
 
-    def laser_plot2(self, data, N_in, style):
-        r = data
-        N = N_in
-        resol = 0.25
-        resol = 58./N
-        laser_angle_range = resol*N/180*np.pi
-        # angle_offset = -18./180*np.pi
-        laser_angle = np.linspace(-1./2*laser_angle_range, 1./2*laser_angle_range, N, endpoint=True)
-        plt.plot(r*np.cos(laser_angle) , r*np.sin(laser_angle) , style)
+  def set_lim(self, xlim,ylim, lloc, legend_flag):
+    # ax = self.fig.gca()
+    # self.ax.set_xticks(np.arange(-1,10,1))
+    # self.ax.set_yticks(np.arange(-2,3,1))
+    plt.xlabel('x [m]',fontsize=10)
+    plt.ylabel('y [m]',fontsize=10)
+    if legend_flag:
+      plt.legend(loc=lloc,fontsize=8)
+    plt.grid()
+    plt.axis('equal')
+    self.ax.set_xlim(xlim)
+    self.ax.set_ylim(ylim)
+
+  def save_fig(self, filename):
+    plt.tight_layout()
+    pp = PdfPages(filename)
+    pp.savefig(self.fig)
+    pp.close()
+
+  def robot(self):
+    self.ax.plot(0,0,'or',markersize=10)
+    self.ax.plot([0, 0.2],[0,0],'k',lw=2)
+
+  def depth_plot(self, data, pose):
+    r = np.mean(data.T,axis=0)
+    N = len(r)
+    resol = 58./N
+    angle_range = resol*N/180*np.pi
+    angle = np.linspace(-1./2*angle_range, 1./2*angle_range,N, endpoint=True) - pose[2]
+    plt.plot(- pose[0] + r*np.cos(angle), - pose[1] + r*np.sin(angle),'g')
+
+  def laser_plot(self, data, pose):
+    r = data
+    N = len(data[0])
+    resol = 0.25
+    resol = 58./N
+    laser_angle_range = resol*N/180*np.pi
+    # angle_offset = -18./180*np.pi
+    laser_angle = np.linspace(-1./2*laser_angle_range, 1./2*laser_angle_range, N, endpoint=True) - pose[2]
+    plt.plot(r*np.cos(laser_angle) - pose[0], r*np.sin(laser_angle) - pose[1],'b')
+
+  def laser_plot2(self, data, N_in, style, label_in):
+    r = data
+    N = N_in
+    resol = 0.25
+    resol = 58./N
+    laser_angle_range = resol*N/180*np.pi
+    # angle_offset = -18./180*np.pi
+    laser_angle = np.linspace(-1./2*laser_angle_range, 1./2*laser_angle_range, N, endpoint=True)
+    plt.plot(r*np.cos(laser_angle) , r*np.sin(laser_angle) , style, label=label_in)
+    # self.set_lim()
+
+  def fov(self, center,theta1, theta2, resolution, **kwargs):
+    theta = np.linspace(np.radians(theta1), np.radians(theta2), resolution)
+    radius = 0.8
+    points = np.vstack((radius*np.cos(theta) + center[0],
+                        radius*np.sin(theta) + center[1]))
+    radius = 3.5
+    theta = theta[::-1]
+    point_outer = np.vstack((radius*np.cos(theta) + center[0],
+                        radius*np.sin(theta) + center[1]))
+    points = np.concatenate((points, point_outer), axis=1)
+    # build the polygon and add it to the axes
+    poly = patches.Polygon(points.T, closed=True, alpha=0.2, **kwargs)
+    self.ax.add_patch(poly)
 
 class data_handler(object):
     """docstring for data_handler."""
